@@ -35,6 +35,8 @@ pipeline {
                         git clone https://\$GIT_USER:\$GIT_TOKEN@github.com/Antony2026-ai/argocd-test.git
                         cd argocd-test
                         sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|g" dev/deployment.yaml
+                        git config --global user.email "you@example.com"
+                        git config --global user.name "Your Name"
                         git add dev/deployment.yaml
                         git commit -m "Update image to build ${BUILD_NUMBER}"
                         git push origin main
