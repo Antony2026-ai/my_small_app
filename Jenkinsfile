@@ -62,49 +62,48 @@ pipeline {
         }
 
         stage('Update K8s Manifest') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'github-creds',
-                    usernameVariable: 'GIT_USER',
-                    passwordVariable: 'GIT_TOKEN')]) {
-                    sh '''
-                        set -e
+    steps {
+        withCredentials([usernamePassword(
+            credentialsId: 'github-creds',
+            usernameVariable: 'GIT_USER',
+            passwordVariable: 'GIT_TOKEN')]) {
+            sh '''
+                set -e
 
-                        rm -rf gitops-tmp
-                        git clone https://${GIT_USER}:${GIT_TOKEN}@${GITOPS_REPO} gitops-tmp
-                        cd gitops-tmp
+                rm -rf gitops-tmp
+                git clone https://${GIT_USER}:${GIT_TOKEN}@${GITOPS_REPO} gitops-tmp
+                cd gitops-tmp
 
-                        # Check: deployment name yaml la iruka?
-                        yq -e "
-                          select(.kind == \"Deployment\" and .metadata.name == env(DEPLOYMENT_NAME))
-                        " "${MANIFEST_PATH}" > /dev/null || {
-                          echo "❌ Deployment '${DEPLOYMENT_NAME}' not found in ${MANIFEST_PATH}"
-                          exit 1
-                        }
-
-                        # ⭐ Dynamic — only this deployment image update
-                        yq -i '
-                          (select(.kind == "Deployment" and .metadata.name == env(DEPLOYMENT_NAME))
-                           .spec.template.spec.containers[0].image)
-                          = env(DOCKER_IMAGE) + ":" + env(IMAGE_TAG)
-                        ' "${MANIFEST_PATH}"
-
-                        git config user.email "jenkins@ci.com"
-                        git config user.name  "Jenkins CI"
-                        git add "${MANIFEST_PATH}"
-
-                        if git diff --cached --quiet; then
-                            echo "No changes to commit"
-                        else
-                            git commit -m "chore(${DEPLOYMENT_NAME}): image ${IMAGE_TAG}"
-                            git push origin main
-                            echo "✅ Updated ${DEPLOYMENT_NAME} → ${IMAGE_TAG}"
-                        fi
-                    '''
+                # Check: deployment name exists in yaml
+                yq -e '
+                  select(.kind == "Deployment" and .metadata.name == env(DEPLOYMENT_NAME))
+                ' "${MANIFEST_PATH}" > /dev/null || {
+                  echo "❌ Deployment '${DEPLOYMENT_NAME}' not found in ${MANIFEST_PATH}"
+                  exit 1
                 }
-            }
-        }
 
+                # Dynamic — only this deployment image update
+                yq -i '
+                  (select(.kind == "Deployment" and .metadata.name == env(DEPLOYMENT_NAME))
+                   .spec.template.spec.containers[0].image)
+                  = env(DOCKER_IMAGE) + ":" + env(IMAGE_TAG)
+                ' "${MANIFEST_PATH}"
+
+                git config user.email "jenkins@ci.com"
+                git config user.name  "Jenkins CI"
+                git add "${MANIFEST_PATH}"
+
+                if git diff --cached --quiet; then
+                    echo "No changes to commit"
+                else
+                    git commit -m "chore(${DEPLOYMENT_NAME}): image ${IMAGE_TAG}"
+                    git push origin main
+                    echo "✅ Updated ${DEPLOYMENT_NAME} → ${IMAGE_TAG}"
+                fi
+            '''
+        }
+    }
+}
         stage('Cleanup') {
             steps {
                 sh 'rm -rf gitops-tmp || true'
