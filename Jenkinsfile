@@ -34,10 +34,10 @@ pipeline {
                         rm -rf manifests-repo
                         git clone https://\$GIT_USER:\$GIT_TOKEN@github.com/Antony2026-ai/argocd-test.git manifests-repo
                         cd manifests-repo
-                        sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|g" k8s/deployment.yaml
+                        sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${BUILD_NUMBER}|g" dev/deployment.yaml
                         git config user.email "jenkins@ci.com"
                         git config user.name "Jenkins CI"
-                        git add k8s/deployment.yaml
+                        git add dev/deployment.yaml
                         git commit -m "Update image to build ${BUILD_NUMBER}" || echo "No changes"
                         git push origin main
                     """
