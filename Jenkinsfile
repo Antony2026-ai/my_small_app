@@ -9,8 +9,31 @@ pipeline {
         IMAGE_TAG        = "${env.BUILD_NUMBER}"
     }
 
-    
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 20, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
     stages {
+
+        // ⭐ NEW — early check: yq, docker, git iruka verify
+        stage('Preflight Check') {
+            steps {
+                sh '''
+                    echo "=== Preflight checks ==="
+                    command -v docker >/dev/null 2>&1 && docker --version || { echo "❌ docker missing"; exit 1; }
+                    command -v git    >/dev/null 2>&1 && git --version    || { echo "❌ git missing";    exit 1; }
+                    command -v yq     >/dev/null 2>&1 && yq --version      || {
+                        echo "❌ yq missing. Install with:"
+                        echo "   docker cp /usr/local/bin/yq jenkins:/usr/local/bin/yq"
+                        echo "   docker exec -u root jenkins chmod +x /usr/local/bin/yq"
+                        exit 1
+                    }
+                    echo "✅ All tools present"
+                '''
+            }
+        }
 
         stage('Checkout') {
             steps {
@@ -47,11 +70,17 @@ pipeline {
                     sh '''
                         set -e
 
-                        command -v yq >/dev/null 2>&1 || { echo "yq not installed"; exit 1; }
-
                         rm -rf gitops-tmp
                         git clone https://${GIT_USER}:${GIT_TOKEN}@${GITOPS_REPO} gitops-tmp
                         cd gitops-tmp
+
+                        # Check: deployment name yaml la iruka?
+                        yq -e "
+                          select(.kind == \"Deployment\" and .metadata.name == env(DEPLOYMENT_NAME))
+                        " "${MANIFEST_PATH}" > /dev/null || {
+                          echo "❌ Deployment '${DEPLOYMENT_NAME}' not found in ${MANIFEST_PATH}"
+                          exit 1
+                        }
 
                         # ⭐ Dynamic — only this deployment image update
                         yq -i '
