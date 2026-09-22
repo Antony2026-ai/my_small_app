@@ -2,38 +2,15 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE     = "kreajith2026/argocd"
-        DEPLOYMENT_NAME  = "my-python-app"                              // ⭐ change per service
-        GITOPS_REPO      = "github.com/Antony2026-ai/argocd-test.git"   // token illama
-        MANIFEST_PATH    = "dev/deployment.yaml"
+        DOCKER_IMAGE     = "kreajith2026/argocd-1"
+        DEPLOYMENT_NAME  = "my-python-app"
+        GITOPS_REPO      = "github.com/Antony2026-ai/argocd-test.git"
+        MANIFEST_DIR     = "dev"
         IMAGE_TAG        = "${env.BUILD_NUMBER}"
     }
 
-    options {
-        disableConcurrentBuilds()
-        timeout(time: 20, unit: 'MINUTES')
-        buildDiscarder(logRotator(numToKeepStr: '20'))
-    }
-
+    
     stages {
-
-        // ⭐ NEW — early check: yq, docker, git iruka verify
-        stage('Preflight Check') {
-            steps {
-                sh '''
-                    echo "=== Preflight checks ==="
-                    command -v docker >/dev/null 2>&1 && docker --version || { echo "❌ docker missing"; exit 1; }
-                    command -v git    >/dev/null 2>&1 && git --version    || { echo "❌ git missing";    exit 1; }
-                    command -v yq     >/dev/null 2>&1 && yq --version      || {
-                        echo "❌ yq missing. Install with:"
-                        echo "   docker cp /usr/local/bin/yq jenkins:/usr/local/bin/yq"
-                        echo "   docker exec -u root jenkins chmod +x /usr/local/bin/yq"
-                        exit 1
-                    }
-                    echo "✅ All tools present"
-                '''
-            }
-        }
 
         stage('Checkout') {
             steps {
@@ -70,56 +47,32 @@ pipeline {
             sh '''
                 set -e
 
-                rm -rf gitops-tmp
-                git clone https://${GIT_USER}:${GIT_TOKEN}@${GITOPS_REPO} gitops-tmp
-                cd gitops-tmp
+                rm -rf argocd-test
+                git clone https://\$GIT_USER:\$GIT_TOKEN@github.com/Antony2026-ai/argocd-test.git
+                cd argocd-test/${MANIFEST_DIR}
 
-                # Check: deployment name exists in yaml
-                yq -e '
-                  select(.kind == "Deployment" and .metadata.name == env(DEPLOYMENT_NAME))
-                ' "${MANIFEST_PATH}" > /dev/null || {
-                  echo "❌ Deployment '${DEPLOYMENT_NAME}' not found in ${MANIFEST_PATH}"
-                  exit 1
-                }
-
-                # Dynamic — only this deployment image update
-                yq -i '
-                  (select(.kind == "Deployment" and .metadata.name == env(DEPLOYMENT_NAME))
-                   .spec.template.spec.containers[0].image)
-                  = env(DOCKER_IMAGE) + ":" + env(IMAGE_TAG)
-                ' "${MANIFEST_PATH}"
+                kustomize edit set image "${DOCKER_IMAGE}=${DOCKER_IMAGE}:${IMAGE_TAG}"
 
                 git config user.email "jenkins@ci.com"
                 git config user.name  "Jenkins CI"
-                git add "${MANIFEST_PATH}"
 
-                if git diff --cached --quiet; then
-                    echo "No changes to commit"
-                else
-                    git commit -m "chore(${DEPLOYMENT_NAME}): image ${IMAGE_TAG}"
-                    git push origin main
-                    echo "✅ Updated ${DEPLOYMENT_NAME} → ${IMAGE_TAG}"
-                fi
+                git add "kustomization.yaml"
+
+                git commit -m "chore(${DEPLOYMENT_NAME}): image ${IMAGE_TAG}"
+                git push origin main
             '''
         }
     }
 }
-        stage('Cleanup') {
-            steps {
-                sh 'rm -rf gitops-tmp || true'
-            }
-        }
+
     }
 
     post {
-        always {
-            sh 'docker logout || true; rm -rf gitops-tmp || true'
-        }
         success {
-            echo "✅ ${DEPLOYMENT_NAME}:${IMAGE_TAG} deployed via ArgoCD"
+            echo "${DEPLOYMENT_NAME}:${IMAGE_TAG} deployed via ArgoCD"
         }
         failure {
-            echo "❌ ${DEPLOYMENT_NAME} build ${IMAGE_TAG} failed"
+            echo "${DEPLOYMENT_NAME} build ${IMAGE_TAG} failed"
         }
     }
 }
