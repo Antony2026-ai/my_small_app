@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE     = "kreajith2026/trip-sit"
-        DEPLOYMENT_NAME  = "trip-deployment-sit"
+        DOCKER_IMAGE     = "kreajith2026/trip-main"
+        DEPLOYMENT_NAME  = "trip-deployment-main"
         GITOPS_REPO      = "github.com/Antony2026-ai/argocd-test.git"
-        MANIFEST_DIR     = "dev/overlays/sit"
+        MANIFEST_DIR     = "dev/overlays/main"
         IMAGE_TAG        = "${env.BUILD_NUMBER}"
     }
 
