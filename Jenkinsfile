@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE     = "kreajith2026/argocd-1"
+        DOCKER_IMAGE     = "kreajith2026/argocd"
         DEPLOYMENT_NAME  = "my-python-app"
         GITOPS_REPO      = "github.com/Antony2026-ai/argocd-test.git"
         MANIFEST_DIR     = "dev"
